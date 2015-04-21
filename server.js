@@ -27,9 +27,10 @@ client.connect(function(err, result) {
 
 // Queries
 var getAllPrediction = 'SELECT * FROM project.prediction;';
-var getPredictionBySymbol = 'SELECT * FROM prediction WHERE symbol = ? ALLOW FILTERING;';
-var insertStockPrediction = 'INSERT INTO prediction (id, symbol, time, prediction) VALUES (?, ?, ?, ?);'
-var getPredictionBySymbolAndTimeRange = 'SELECT * FROM predicition WHERE symbol = ? AND time > ? AND time < ?;';
+var getPredictionByticker = 'SELECT * FROM prediction WHERE ticker = ? ALLOW FILTERING;';
+var insertStockPrediction = 'INSERT INTO prediction (ticker, date ,close,difference,humidity,maxtemperature,mintemperature,precipitation,prediction,predictionprobability,winddirdegrees) VALUES (?,?,?,?,?,?,?,?,?,?,?);'
+var getPredictionBytickerAndTimeRange = 'SELECT * FROM prediction WHERE ticker = ? AND date > ? AND date < ? allow filtering;';
+var getPredictionBytickerAndStartDate = 'SELECT * FROM prediction WHERE ticker = ? AND date > ? allow filtering;';
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
@@ -41,7 +42,6 @@ var port = process.env.PORT || 8080;        // set our port
 // ROUTES FOR OUR API
 // =============================================================================
 var router = express.Router();              // get an instance of the express Router
-
 
 // Canssandra stuff
 // test route to make sure everything is working (accessed at GET http://localhost:8080/api)
@@ -102,32 +102,51 @@ app.post('/tables', function(req, res) {
 
 
 app.post('/prediction', function(req, res) {
-    //var insertStock = 'INSERT INTO prediction (id, symbol, time, prediction) VALUES (?, ?, ?, ?)'
-    var insertStockPrediction = 'INSERT INTO prediction (id, symbol, time, prediction) VALUES (?, ?, ?, ?)'
-
-    var id = null;
-    if ( ! req.body.hasOwnProperty('id')) {
-        id = cassandra.types.uuid();
-    } else {
-        id = req.body.id;
-    }
-    var timestamp = Date.now() / 1000
+    //(ticker, date ,close,difference,humidity,maxtemperature,mintemperature,precipitation,prediction,predictionprobability,winddirdegrees)
     client.execute(insertStockPrediction,
-        //[id, req.body.symbol, req.body.time, req.body.prediction],
-        [id, req.body.symbol, timestamp, true],
-        afterExecution('Error: ', req.body.symbol + ' prediction at' + req.body.time + ' inserted.', res));
+        [req.body.ticker, req.body.date, req.body.close, req.body.difference, req.body.humidity,
+         req.body.maxtemperature, req.body.mintemperature, req.body.precipitation, req.body.prediction,
+         req.body.predictionprobability, req.body.winddirdegrees],
+        afterExecution('Error: ', req.body.ticker + ' prediction at' + req.body.time + ' inserted.', res));
 });
 
-app.get('/prediction/:symbol', function(req, res) {
-    client.execute(getPredictionBySymbol, [ req.params.symbol ], function(err, result) {
+app.get('/prediction/:ticker', function(req, res) {
+    client.execute(getPredictionByticker, [ req.params.ticker ], function(err, result) {
         if (err) {
             console.log(err)
             res.status(404).send({ msg : 'Stock not found.' });
         } else {
-            res.json(result);    
+            res.json(result.rows);    
         }
     });
 });
+
+app.get('/prediction/:ticker/:startdate', function(req, res) {
+	var startdate = new Date(req.params.startdate);
+    client.execute(getPredictionBytickerAndStartDate, [ req.params.ticker, startdate], function(err, result) {
+        if (err) {
+            console.log(err)
+            res.status(404).send({ msg : 'Stock not found.' });
+        } else {
+            res.json(result.rows);    
+        }
+    });
+});
+
+app.get('/prediction/:ticker/:startdate/:enddate', function(req, res) {
+	var startdate = new Date(req.params.startdate);
+	var enddate = new Date(req.params.enddate);
+    client.execute(getPredictionBytickerAndTimeRange, [ req.params.ticker,startdate,enddate ], function(err, result) {
+        if (err) {
+            console.log(err)
+            res.status(404).send({ msg : 'Stock not found.' });
+        } else {
+            res.json(result.rows);    
+        }
+    });
+});
+
+
 
 app.get('/prediction', function(req, res) {
     client.execute(getAllPrediction, function(err, result) {
@@ -135,7 +154,7 @@ app.get('/prediction', function(req, res) {
             console.log(err)
             res.status(404).send({ msg : 'No prediction found.' });
         } else {
-            res.json(result);    
+            res.json(result.rows);    
         }
     });
 });
@@ -146,3 +165,4 @@ app.get('/prediction', function(req, res) {
 // =============================================================================
 app.listen(port);
 console.log('Magic happens on port ' + port);
+
