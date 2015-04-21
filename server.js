@@ -31,6 +31,8 @@ var getPredictionByticker = 'SELECT * FROM prediction WHERE ticker = ? ALLOW FIL
 var insertStockPrediction = 'INSERT INTO prediction (ticker, date ,close,difference,humidity,maxtemperature,mintemperature,precipitation,prediction,predictionprobability,winddirdegrees) VALUES (?,?,?,?,?,?,?,?,?,?,?);'
 var getPredictionBytickerAndTimeRange = 'SELECT * FROM prediction WHERE ticker = ? AND date > ? AND date < ? allow filtering;';
 var getPredictionBytickerAndStartDate = 'SELECT * FROM prediction WHERE ticker = ? AND date > ? allow filtering;';
+var deletePredictionByTickerAndTimeRange = 'DELETE FROM prediction WHERE ticker = ? AND date > ? AND date < ? allow filtering';
+var deletePredictionByTickerAndTime = 'DELETE FROM prediction WHERE ticker = ? AND date = ?';
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
@@ -100,7 +102,7 @@ app.post('/tables', function(req, res) {
 
 
 
-
+// POST
 app.post('/prediction', function(req, res) {
     //(ticker, date ,close,difference,humidity,maxtemperature,mintemperature,precipitation,prediction,predictionprobability,winddirdegrees)
     client.execute(insertStockPrediction,
@@ -108,6 +110,18 @@ app.post('/prediction', function(req, res) {
          req.body.maxtemperature, req.body.mintemperature, req.body.precipitation, req.body.prediction,
          req.body.predictionprobability, req.body.winddirdegrees],
         afterExecution('Error: ', req.body.ticker + ' prediction at' + req.body.time + ' inserted.', res));
+});
+
+// GET
+app.get('/prediction', function(req, res) {
+    client.execute(getAllPrediction, function(err, result) {
+        if (err) {
+            console.log(err)
+            res.status(404).send({ msg : 'No prediction found.' });
+        } else {
+            res.json(result.rows);    
+        }
+    });
 });
 
 app.get('/prediction/:ticker', function(req, res) {
@@ -146,20 +160,18 @@ app.get('/prediction/:ticker/:startdate/:enddate', function(req, res) {
     });
 });
 
-
-
-app.get('/prediction', function(req, res) {
-    client.execute(getAllPrediction, function(err, result) {
+// DELETE 
+app.delete('/prediction/:ticker/:date', function(req, res) {
+    var date = new Date(req.params.date);
+    client.execute(deletePredictionByTickerAndTime, [ req.params.ticker, date ], function(err, result) {
         if (err) {
             console.log(err)
-            res.status(404).send({ msg : 'No prediction found.' });
+            res.status(404).send({ msg : 'Stock not found.' });
         } else {
-            res.json(result.rows);    
+            res.json(result);    
         }
     });
 });
-
-
 
 // START THE SERVER
 // =============================================================================
