@@ -8,7 +8,7 @@ var express    = require('express');        // call express
 var app        = express();                 // define our app using express
 var bodyParser = require('body-parser');
 var cassandra  = require('cassandra-driver');
-var async 	   = require('async')
+var async      = require('async')
 
 // get in contact with cassandra
 var ip = '52.5.253.89';
@@ -25,21 +25,11 @@ client.connect(function(err, result) {
     
 });
 
-
-
 // Queries
-var getSongById = 'SELECT * FROM simplex.songs WHERE id = ?;';
-var getStockBySymbol = 'SELECT * FROM project.stock WHERE symbol = ? ALLOW FILTERING;';
-var getPredictionBySymbol = 'SELECT * FROM prediction WHERE symbol = ? ALLOW FILTERING;';
-var getAllStock = 'SELECT * FROM project.stock';
-var getAllWeather = 'SELECT * FROM project.weather';
-var getAllStock = 'SELECT * FROM project.stock';
 var getAllPrediction = 'SELECT * FROM project.prediction;';
-var insertWeather = 'INSERT INTO project.weather (id, time, zipcode, temperature, precipitation, dewpoint)  '
-    + 'VALUES(?, ?, ?, ?, ?, ?);';
-
-var insertStockPrediction = 'INSERT INTO prediction (id, symbol, time, prediction) VALUES (?, ?, ?, ?)'
-
+var getPredictionBySymbol = 'SELECT * FROM prediction WHERE symbol = ? ALLOW FILTERING;';
+var insertStockPrediction = 'INSERT INTO prediction (id, symbol, time, prediction) VALUES (?, ?, ?, ?);'
+var getPredictionBySymbolAndTimeRange = 'SELECT * FROM predicition WHERE symbol = ? AND time > ? AND time < ?;';
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
@@ -53,8 +43,6 @@ var port = process.env.PORT || 8080;        // set our port
 var router = express.Router();              // get an instance of the express Router
 
 
-
-
 // Canssandra stuff
 // test route to make sure everything is working (accessed at GET http://localhost:8080/api)
 router.get('/metadata', function(req, res) {
@@ -63,6 +51,7 @@ router.get('/metadata', function(req, res) {
         return { address : node.address, rack : node.rack, datacenter : node.datacenter }
     }));
 });
+
 app.post('/keyspace', function(req, res) {
     client.execute("CREATE KEYSPACE IF NOT EXISTS project WITH replication " + 
                    "= {'class' : 'SimpleStrategy', 'replication_factor' : 3};",
@@ -74,7 +63,7 @@ app.post('/keyspace', function(req, res) {
 function afterExecution(errorMsessage, successMessage, res) {
     return function(err) {
         if (err) {
-        	console.log("error!!!!")
+            console.log("error!!!!")
             console.log(err)
             return errorMsessage
             //return res.json(errorMsessage);
@@ -86,40 +75,26 @@ function afterExecution(errorMsessage, successMessage, res) {
 
 app.post('/tables', function(req, res) {
     async.parallel([
-        function(next) {
-            client.execute('CREATE TABLE IF NOT EXISTS project.weather (' +
-                'id uuid,' +
-                'time timestamp,' +   
-                'zipcode int,' +
-                'temperature int,' +
-                'precipitation int,' +
-                'dewpoint int,' +
-                'PRIMARY KEY (id, time, zipcode)' +
-                ');',
-                next);
-        },
-        function(next) {
-            client.execute('CREATE TABLE IF NOT EXISTS project.stock (' +
-                'id uuid,' +
-                'symbol text,' +
-                'time timestamp,' +
-                'price double,' +
-                'volume int,' +
-                'PRIMARY KEY (id, symbol, time)' +
-                ');',
-                next);
-        },
+
+//"Ticker", "Date", "Close", "Difference", "Max TemperatureF", "Mean TemperatureF", "Min TemperatureF", "MeanDew PointF", "Mean Humidity",  "Mean VisibilityMiles", "PrecipitationIn", "CloudCover", "WindDirDegrees
         function(next) {
             client.execute('CREATE TABLE IF NOT EXISTS project.prediction (' +
-                'id uuid,' +
-                'symbol text,' +
-                'time timestamp,' +
-                'prediction boolean,' +
-                'PRIMARY KEY (id, symbol, time)' +
+                'Ticker text,' +
+                'Date timestamp,' + 
+                'Close float,' +
+                'Difference float,' +
+                'MaxTemperature int,' +
+                'MinTemperature int,' +
+                'WindDirDegrees int,' + 
+                'Precipitation float,' + 
+                'Humidity int,' +
+                'Prediction boolean,' +
+                'PredictionProbability float,' +
+                'PRIMARY KEY((Ticker), Date)' +
                 ');',
                 next);
+            
         }
-
     ], afterExecution('Error: ', 'Tables created.' , res));
 });
 
@@ -166,58 +141,6 @@ app.get('/prediction', function(req, res) {
 });
 
 
-app.get('/weather', function(req, res) {
-    client.execute(getAllWeather, function(err, result) {
-        if (err) {
-            res.status(404).send({ msg : 'Weather not found.' });
-        } else {
-            res.json(result);   
-        }
-    });
-});
-
-app.post('/weather', function(req, res) {
-    var id = null;
-    if ( ! req.body.hasOwnProperty('id')) {
-        id = cassandra.types.uuid();
-    } else {
-        id = req.body.id;
-    }
-    client.execute(insertWeather,
-        [id, req.body.time, req.body.zipcode, req.body.temperature, req.body.precipitation, req.body.dewpoint],
-        afterExecution('Error: ', 'Weather at' + req.body.time + ' inserted.', res));
-});
-
-app.get('/stock', function(req, res) {
-    client.execute(getAllStock, function(err, result) {
-        if (err) {
-            console.log(err)
-            res.status(404).send({ msg : 'Stock not found.' });
-        } else {
-            res.json(result);   
-        }
-    });
-});
-
-app.get('/stock/:symbol', function(req, res) {
-    client.execute(getStockBySymbol, [ req.params.symbol ], function(err, result) {
-        if (err) {
-            console.log(err)
-            res.status(404).send({ msg : 'Stock not found.' });
-        } else {
-            res.json(result);    
-        }
-    });
-});
-
-
-
-
-// more routes for our API will happen here
-
-// REGISTER OUR ROUTES -------------------------------
-// all of our routes will be prefixed with /api
-app.use('/api', router);
 
 // START THE SERVER
 // =============================================================================
